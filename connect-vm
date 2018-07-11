@@ -1,5 +1,9 @@
 #!/bin/bash
 
+## Utilise minicom; tester avec la version 2.7-1
+# ii  minicom 2.7-1 amd64 friendly menu driven serial communication program
+
+
 NODE=`hostname`
 CONF_DIRECTORY=/etc/pve/nodes/*/qemu-server
 CONNECT_COMMAND="minicom -D unix#/var/run/qemu-server"
