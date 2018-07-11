@@ -1,0 +1,139 @@
+#!/bin/bash
+
+NODE=`hostname`
+CONF_DIRECTORY=/etc/pve/nodes/*/qemu-server
+CONNECT_COMMAND="minicom -D unix#/var/run/qemu-server"
+
+
+command_list(){
+   if [ -e "$@" ]; then
+     help
+   elif [ $1 == "--help" ];then
+      help
+   elif [ $1 == "--show-all" ];then
+      show_all_VMs_info
+   elif [ $1 == "--connect" ];then
+      CONNECT_VM $2  
+   else 
+     help
+   fi
+}
+
+
+help() {
+   echo ""
+   echo "--show-id  : show info of a VM ID    =>  connect_VM --show-id xxx"
+   echo "  info list :" 
+   echo "    - VM ID"
+   echo "    - VM Name"
+   echo "    - Hypervisor"
+   echo "    - MAC"
+   echo ""
+   echo "--show-all  : same as --show-id but show info of all VM   => connect_VM --show-all"
+   echo ""
+   echo "--connect  : connect to a VM using minicom   =>  connect_VM --connect xxx"
+   echo ""
+}
+
+function start_VM {
+   /usr/sbin/qm start $1
+}
+
+function stop_VM {
+   /usr/sbin/qm stop $1
+}
+
+
+function show_VM_info {
+  echo -n "VM ID:"$1 " " 
+  echo -n `grep name $CONF_DIRECTORY/$1.conf| sed s/" "//g` " "
+  echo -n "Hyperviseur:"`find /etc/pve/nodes/ -type f -name $1.conf | cut -d/ -f 5` " " 
+  echo -n "MAC:"`grep net[0-9] $CONF_DIRECTORY/$1.conf| sed s/" "//g | cut -d, -f1 | cut -d= -f 2` " "
+  VM_IS_POWERON $1
+  echo "RUNING:"$VM_IS_POWERON|sed s/1/YES/g |sed s/0/NO/g|sed s/3/?/g
+}
+
+function show-vm-disc-usage {
+  for disk in `find /VMs/images/$1/ -type f`
+      do
+         echo `qemu-img info  $disk | grep -v "cluster\|format"| cut -d\( -f1|cut -d/ -f5`
+  done
+}
+
+function show_all_VMs_info {
+  for VM in `ls $CONF_DIRECTORY| sed s/.conf//g | grep -v /etc/pve/nodes`
+    do
+      show_VM_info $VM
+  done  
+}
+
+VM_on_this_hypervisor() {
+  VM_on_this_hypervisor="0"
+  if [ -f /etc/pve/nodes/$NODE/qemu-server/$1.conf ];then
+     VM_on_this_hypervisor="1"
+  fi
+}
+
+VM_IS_POWERON() {
+  VM_on_this_hypervisor $1
+  if [ ! $VM_on_this_hypervisor == 1 ];then
+      VM_IS_POWERON=3
+  elif [ -e /var/run/qemu-server/$1.pid ];then
+         VM_IS_POWERON=1
+  else
+      VM_IS_POWERON=0
+  fi
+}
+
+VM_SERIAL_CONSOLE_ACTIVATED() {
+  VM_on_this_hypervisor $1
+  if [ ! $VM_on_this_hypervisor == 1 ];then
+      VM_SERIAL_CONSOLE_ACTIVATED=3
+  elif [ -e /var/run/qemu-server/$1.serial ];then
+         VM_SERIAL_CONSOLE_ACTIVATED=1
+  else
+      VM_SERIAL_CONSOLE_ACTIVATED=0
+  fi
+}
+
+MINICOM_INSTALLED() {
+  if which minicom > /dev/null;then
+     MINICOM_INSTALLED=1
+  else
+     MINICOM_INSTALLED=0
+  fi
+}
+
+CONNECT_VM() {
+  MINICOM_INSTALLED
+  if [ ! $MINICOM_INSTALLED == 1 ];then
+     echo "please install minicom firt => apt-get install minicom"
+     quit
+  fi
+
+  VM_on_this_hypervisor $1
+  if [ ! $VM_on_this_hypervisor == 1 ];then
+     echo "This VM is not on this hypervisor !!"
+     quit
+  fi
+
+  VM_IS_POWERON $1
+  if [ ! $VM_IS_POWERON == 1 ];then
+     echo "This VM is power down !!"
+     quit
+  fi  
+
+  VM_SERIAL_CONSOLE_ACTIVATED $1
+  if [ ! $VM_SERIAL_CONSOLE_ACTIVATED == 1 ];then
+     echo "The serial console of this VM is not activated !!"
+     quit
+  fi
+
+  $CONNECT_COMMAND/$1.serial
+}
+
+function quit {
+  exit 0
+}
+
+command_list $1 $2 $3
