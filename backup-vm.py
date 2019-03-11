@@ -6,87 +6,75 @@ path_log="/var/log/auto-vzdump.log";
 path_vzdump = "vzdump";
 path_dump = "/VMs/dump/";
 dump_bw_limit = 50000000;
-
+ 
 # Configuration remote (SSH / SCP)
 enable_remote_backup = True;
-remote_host = "<hyp_distant>"
+remote_host = "<host>"
 remote_login = "root"
 remote_folder = "/VMs/dump"
 
 # Configuration des backup par VM
 config_vm = {
-        '103' :{
+        '510' :{
+                'mode' : 'snapshot',
+                'compress' : True,
+                'max_backup_local' : 1
+        },
+	'511' :{
                 'mode' : 'snapshot',
                 'compress' : True,
                 'max_backup_local' : 1
         }
-#	'108' :{
-#                'mode' : 'snapshot',
-#                'compress' : True,
-#                'max_backup_local' : 1
-#        }
-#
-#       '510' :{
-#                'mode' : 'snapshot',
-#                'compress' : True,
-#                'max_backup_local' : 2
-#        },
-#       '511' :{
-#                'mode' : 'snapshot',
-#                'compress' : True,
-#                'max_backup_local' : 2
-#        }
-
 
 };
-
+ 
 #
 # Fin de la configuration
 #
-
+ 
 # Functions
 def build_cli_dump( vm_id, vm_options ):
         cli = path_vzdump+" "+vm_id;
-
+ 
         # On set le dossier de backup
         if path_dump :
                 cli += " --dumpdir "+path_dump;
-
+ 
         # On set la vitesse de backup
         if dump_bw_limit :
                 cli += " --bwlimit "+str(dump_bw_limit);
-
+ 
         # On set le nombre de backup conserver
         if 'max_backup_local' in vm_options.keys() :
                 cli += " --maxfiles "+str(vm_options['max_backup_local']);
-
+ 
         # On set le mode de backup utiliser
-	# snapshot/suspend/stop
+	# snapshot/suspend/stop 
         if 'mode' in vm_options.keys() :
                 cli += " --mode "+vm_options['mode'];
         else :
                 cli += " --mode suspend";
-
+ 
         # On active ou non la compression
         if 'compress' in vm_options.keys() :
                 if vm_options['compress'] :
                         cli += " --compress gzip";
                 else :
                         cli += " --compress 0";
-
+ 
         # On ajoute l'option pour clean les dossiers temporaires (/var/log, /tmp, /var/tmp, ...)
         if 'exclude-tmp' in vm_options.keys() :
                 if vm_options['exclude-tmp'] :
                         cli += " --stdexcludes 1";
                 else :
                         cli += " --stdexcludes 0";
-
+ 
         # On ajoute ou non des excludes path custom
         if 'exclude-path' in vm_options.keys() :
                 for path in vm_options['exclude-path']:
                         cli += " --exclude-path "+path;
         return cli
-
+ 
 def get_last_backup( vm_id ):
         lastFile = False;
         for files in os.listdir( path_dump ):
@@ -101,7 +89,7 @@ def remote_backup( vm_id ):
                 hostname = commands.getoutput("hostname");
                 folder = remote_folder+hostname+"/";
                 #cmdName = "ssh "+remote_login+"@"+remote_host+" \"qm list |grep "+vm_id+"|awk {\'print $2\'} \"";
-		vm_name = commands.getoutput("qm list |grep "+vm_id+"|awk {'print $2'}");
+		vm_name = commands.getoutput("/usr/sbin/qm list |grep "+vm_id+"|awk {'print $2'}");
 		log( ">> "+vm_name );
 		#log( commands.getoutput(vm_name) );
                 # Creation du folder distant
@@ -109,7 +97,7 @@ def remote_backup( vm_id ):
                 log( ">> "+cmdSsh );
                 log( commands.getoutput(cmdSsh) );
 		paths = remote_folder+"/"+hostname+"/"+vm_name+"/";
-		finds = " -type f -printf '%T@\t%p\n' |sort -t $'\t' -g | head -n2 | cut -d $'\t' -f 2- |xargs rm";
+		finds = " -type f -printf '%T@\t%p\n' |sort -t $'\t' -g | head -n2 | cut -d $'\t' -f 2- |xargs rm"; 
 		# Delete all file except 2 newest
 		log( ">> Nettoyage des backups" );
                 cmdDel = subprocess.call(["ssh", ""+remote_login+"@"+remote_host+"", "find "+paths+finds+""]);
@@ -120,12 +108,12 @@ def remote_backup( vm_id ):
 		cmdScp = "scp "+path_dump+backup+" "+remote_login+"@"+remote_host+":"+path_dump+hostname+"/"+vm_name+"/"+last_backup;
                 log( ">> "+cmdScp );
                 log( commands.getoutput(cmdScp) );
-
+ 
 def log( txt ):
         print txt;
         with open(path_log, "a") as logfile:
                 logfile.write( txt +"\n");
-
+ 
 # Processing
 for vm_id, vm_options in config_vm.items() :
         log( "Backup of VM "+vm_id+" : Started" );
