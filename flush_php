@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+init() {
+  FRONT_LIST=('hostname1' 'hostname2')
+}
+
+main() {
+  init
+
+  for front in "${FRONT_LIST[@]}"; do
+    echo $front
+        ssh -t tma_www@$front "cachetool apcu:cache:clear --cli ; cachetool opcache:reset --cli"
+        ssh -t tma_www@$front "cachetool apcu:cache:clear --fcgi=/var/run/php-www.sock ; cachetool opcache:reset --fcgi=/var/run/php-www.sock"
+  done
+}
+
+main "@"
